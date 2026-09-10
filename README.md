@@ -2,16 +2,16 @@
 
 > A production-grade, cloud-native platform for load testing any API endpoint with real-time analytics, distributed tracing, and enterprise-level observability.
 
-[![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com)
+[![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com/Suhani-Srikantaswamy/api-benchmarking-saas/actions)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-Ready-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## 📚 Quick Links
 
-- 🚀 **[Local Deployment](./DEPLOYMENT.md)** — Run full stack on Docker Compose
-- 🎓 **[Vercel Demo Setup](./VERCEL_DEPLOYMENT.md)** — Deploy frontend to Vercel, backend locally (perfect for presentations)
-- ⚡ **[Demo Quick Start](./DEMO_QUICKSTART.md)** — 30-minute demo checklist
+- 🚀 **[How to Run](#-quick-start)** — Run full stack on Docker Compose
 - ☸️ **[Kubernetes Deployment](./k8s/)** — Production-ready K8s manifests
+- 🔧 **[Backend Source](./backend/)** — Node.js API + Worker
+- 🎨 **[Frontend Source](./frontend/)** — React Dashboard
 
 ## ✨ Features
 
@@ -159,7 +159,7 @@ docker compose up -d backend worker frontend prometheus grafana alertmanager jae
 
 > 📌 **On Windows?** Use WSL or Git Bash, not PowerShell, to avoid Bash script line-ending issues.
 
-> 📋 **See [DEPLOYMENT.md](./DEPLOYMENT.md)** for detailed step-by-step deployment instructions and redeploy checklist.
+> 📋 **Run `./scripts/health-check.sh --timeout 120`** to verify all services are up after deployment.
 
 **Access the services:**
 
@@ -1319,7 +1319,7 @@ We welcome contributions! Please follow these guidelines:
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/your-username/api-benchmarking-saas.git
+git clone https://github.com/Suhani-Srikantaswamy/api-benchmarking-saas.git
 cd api-benchmarking-saas
 
 # Install dependencies
@@ -1445,9 +1445,8 @@ SOFTWARE.
 
 ## 📞 Support
 
-- **Issues:** [GitHub Issues](https://github.com/your-username/api-benchmarking-saas/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/your-username/api-benchmarking-saas/discussions)
-- **Email:** support@example.com
+- **Issues:** [GitHub Issues](https://github.com/Suhani-Srikantaswamy/api-benchmarking-saas/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/Suhani-Srikantaswamy/api-benchmarking-saas/discussions)
 
 ---
 
