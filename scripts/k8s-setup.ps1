@@ -59,6 +59,11 @@ docker build `
     -f "$REPO_ROOT\frontend\Dockerfile" `
     "$REPO_ROOT\frontend"
 
+Write-Host "      Building analytics (FastAPI)..."
+docker build `
+    -t benchly-analytics:latest `
+    "$REPO_ROOT\analytics"
+
 Write-Host "      Images built:"
 docker images | Select-String "benchly"
 
@@ -89,6 +94,7 @@ kubectl wait --for=condition=ready pod -l app=redis -n $NAMESPACE --timeout=60s
 
 kubectl apply -f "$REPO_ROOT\k8s\backend-deployment.yaml"
 kubectl apply -f "$REPO_ROOT\k8s\worker-deployment.yaml"
+kubectl apply -f "$REPO_ROOT\k8s\analytics-deployment.yaml"
 kubectl apply -f "$REPO_ROOT\k8s\frontend-deployment.yaml"
 kubectl apply -f "$REPO_ROOT\k8s\hpa.yaml"
 kubectl apply -f "$REPO_ROOT\k8s\prometheus.yaml"

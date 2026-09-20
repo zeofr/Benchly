@@ -99,6 +99,7 @@ services:
       REDIS_HOST:  redis
       REDIS_PORT:  6379
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANALYTICS_URL: http://analytics:8001
       LOG_LEVEL:   info
       OTEL_ENABLED: "true"
       OTEL_SERVICE_NAME: benchmark-worker
@@ -190,6 +191,24 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # ── Analytics API (FastAPI + Pandas) ─────────────────────────────────────────
+  analytics:
+    build:
+      context: ./analytics
+      dockerfile: Dockerfile
+    container_name: benchmark-analytics
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ── Jaeger (Distributed Tracing) ─────────────────────────────────────────────
   jaeger:

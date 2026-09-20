@@ -255,6 +255,40 @@ jobs:
           path: /tmp/backend-image.tar.gz
           retention-days: 1
 
+  # ── Job 7b: Build Analytics Docker Image ────────────────────────────────────
+  build-analytics-image:
+    name: Build Analytics Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test-backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build analytics image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./analytics
+          push: false
+          tags: benchmark-analytics:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+
+      - name: Trivy vulnerability scan — analytics
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: benchmark-analytics:${{ github.sha }}
+          format: table
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL
+
   # ── Job 8: Build Frontend Docker Image ──────────────────────────────────────
   build-frontend-image:
     name: Build Frontend Image

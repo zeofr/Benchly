@@ -21,3 +21,10 @@ scrape_configs:
       - targets: ['backend:4000']
     metrics_path: '/metrics'
     scrape_interval: 10s
+
+  # Analytics FastAPI service — per-analysis counters and latency
+  - job_name: 'benchmark-analytics'
+    static_configs:
+      - targets: ['analytics:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 15s

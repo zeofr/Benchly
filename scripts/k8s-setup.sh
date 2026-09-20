@@ -65,6 +65,11 @@ docker build \
   -f "$REPO_ROOT/frontend/Dockerfile" \
   "$REPO_ROOT/frontend"
 
+echo "      Building analytics (FastAPI)..."
+docker build \
+  -t benchly-analytics:latest \
+  "$REPO_ROOT/analytics"
+
 echo "      Images built:"
 docker images | grep benchly
 
@@ -109,6 +114,9 @@ kubectl apply -f "$REPO_ROOT/k8s/backend-deployment.yaml"
 
 echo "      Worker..."
 kubectl apply -f "$REPO_ROOT/k8s/worker-deployment.yaml"
+
+echo "      Analytics (FastAPI)..."
+kubectl apply -f "$REPO_ROOT/k8s/analytics-deployment.yaml"
 
 echo "      Frontend..."
 kubectl apply -f "$REPO_ROOT/k8s/frontend-deployment.yaml"

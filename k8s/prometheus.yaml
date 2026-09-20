@@ -41,6 +41,13 @@ data:
         metrics_path: '/metrics'
         scrape_interval: 10s
 
+      # Analytics FastAPI service — exposes per-analysis counters and latency
+      - job_name: 'benchmark-analytics'
+        static_configs:
+          - targets: ['analytics.benchmark.svc.cluster.local:8001']
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+
       # Pod-level discovery — gets per-pod metrics when HPA scales replicas.
       # Requires pods to have these annotations (set in backend-deployment.yaml):
       #   prometheus.io/scrape: "true"

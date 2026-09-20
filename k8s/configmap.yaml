@@ -15,3 +15,5 @@ data:
   OTEL_ENABLED:          "true"
   OTEL_SERVICE_NAME:     "benchmark-backend"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318/v1/traces"
+  # Analytics FastAPI service URL
+  ANALYTICS_URL: "http://analytics:8001"

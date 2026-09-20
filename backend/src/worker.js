@@ -86,48 +86,20 @@ const worker = new Worker(
             status: 'completed'
           });
 
-          // Attempt to run analytics (Python) to generate NL diagnosis if available
-          try {
-            const analyticsInput = {
-              avg: metrics.avg_response_time,
-              p95: metrics.max_response_time || metrics.avg_response_time,
-              reqs: metrics.total_requests,
-              rps: metrics.requests_per_sec,
-              failed: metrics.failed_requests,
-              error_rate: (metrics.error_rate || 0) / 100.0
-            };
-
-            const analyticsPath = resolveAnalyticsPath();
-            const tmpSummary = path.join('/tmp', `analytics-summary-${testId}.json`);
-            fs.writeFileSync(tmpSummary, JSON.stringify(analyticsInput));
-
-            const py = execFile.bind(null, 'python3', [path.join(analyticsPath, 'ingest_k6.py'), tmpSummary], { timeout: 20000 });
-            py(async (pyErr, pyStdout, pyStderr) => {
-              if (pyErr) {
-                logger.warn('Analytics script failed', { testId, error: pyErr.message, pyStderr });
-              } else {
-                try {
-                  const out = JSON.parse(pyStdout);
-                  const nl = out.diagnosis || out.llm_refinement || out;
-                  await db.saveBenchmark({
-                    test_id: testId,
-                    api_url: apiUrl,
-                    ...metrics,
-                    nl_analysis: JSON.stringify(nl),
-                    status: 'completed'
-                  });
-
-                  // Notify SSE clients with diagnosis included
-                  notifyClients(testId, { ...metrics, test_id: testId, status: 'completed', analysis: nl });
-                } catch (e) {
-                  logger.warn('Failed to parse analytics output', { testId, error: e.message });
-                }
-              }
-              try { fs.unlinkSync(tmpSummary); } catch {}
-            });
-          } catch (e) {
-            logger.warn('Error running analytics', { testId, error: e.message });
-          }
+          // Call the FastAPI analytics service for NL diagnosis + HPA recommendation.
+          // Falls back gracefully if the analytics service is unavailable.
+          callAnalyticsService(testId, apiUrl, metrics).then((nl) => {
+            if (nl) {
+              db.saveBenchmark({
+                test_id: testId,
+                api_url: apiUrl,
+                ...metrics,
+                nl_analysis: JSON.stringify(nl),
+                status: 'completed'
+              }).catch((e) => logger.warn('Failed to persist analytics result', { testId, error: e.message }));
+              notifyClients(testId, { ...metrics, test_id: testId, status: 'completed', analysis: nl });
+            }
+          }).catch((e) => logger.warn('Analytics service call failed', { testId, error: e.message }));
 
           // Notify SSE clients immediately with numeric metrics
           notifyClients(testId, { ...metrics, test_id: testId, status: 'completed' });
@@ -214,27 +186,68 @@ function parseK6Output(filePath) {
   }
 }
 
-// ── Graceful Shutdown ─────────────────────────────────────────────────────────
+// ── Analytics Service HTTP Client ────────────────────────────────────────────
+/**
+ * POST the k6 metrics to the FastAPI analytics service.
+ * Returns the diagnosis + HPA recommendation, or null if the service is down.
+ */
+async function callAnalyticsService(testId, apiUrl, metrics) {
+  const analyticsUrl = process.env.ANALYTICS_URL || 'http://analytics:8001';
+  const payload = {
+    avg_response_time: metrics.avg_response_time,
+    p95_latency_ms:    metrics.max_response_time || metrics.avg_response_time,
+    requests_per_sec:  metrics.requests_per_sec,
+    total_requests:    metrics.total_requests,
+    error_rate_pct:    metrics.error_rate || 0,
+    current_replicas:  1,
+  };
+
+  try {
+    const https = require('http');
+    const body = JSON.stringify(payload);
+    const url = new URL(`${analyticsUrl}/analyse`);
+
+    return await new Promise((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: url.hostname,
+          port:     url.port || 8001,
+          path:     url.pathname,
+          method:   'POST',
+          headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+          timeout:  15000,
+        },
+        (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              const out = JSON.parse(data);
+              logger.info('Analytics service responded', { testId, summary: out.summary });
+              resolve(out);
+            } catch (e) {
+              reject(e);
+            }
+          });
+        }
+      );
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Analytics service timeout')); });
+      req.write(body);
+      req.end();
+    });
+  } catch (err) {
+    logger.warn('Analytics service unavailable, skipping NL analysis', { testId, error: err.message });
+    return null;
+  }
+}
+
+
 async function shutdown() {
   logger.info('Worker shutting down...');
   await worker.close();
   await db.pool.end();
   process.exit(0);
-}
-
-function resolveAnalyticsPath() {
-  const candidates = [
-    path.join(__dirname, '../../analytics'),
-    path.join(__dirname, '../analytics'),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(candidate, 'ingest_k6.py'))) {
-      return candidate;
-    }
-  }
-
-  return candidates[0];
 }
 
 process.on('SIGTERM', shutdown);
