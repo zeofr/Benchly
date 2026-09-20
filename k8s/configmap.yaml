@@ -1,6 +1,3 @@
-# Fix 10: ConfigMaps for non-sensitive environment config
-# Separates config from secrets — secrets for passwords, configmaps for everything else
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,16 +11,7 @@ data:
   REDIS_HOST:     "redis"
   REDIS_PORT:     "6379"
   LOG_LEVEL:      "info"
-  CORS_ORIGIN:    "https://benchmark.local"
-  # Rate limiting config
-  RATE_LIMIT_WINDOW_MS:  "900000"   # 15 minutes
-  RATE_LIMIT_MAX:        "100"
-  LOAD_TEST_LIMIT_MAX:   "5"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: frontend-config
-  namespace: benchmark
-data:
-  VITE_API_URL: "https://benchmark.local/api"
+  # Jaeger tracing — points to the in-cluster jaeger Service
+  OTEL_ENABLED:          "true"
+  OTEL_SERVICE_NAME:     "benchmark-backend"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318/v1/traces"

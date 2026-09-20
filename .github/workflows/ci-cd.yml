@@ -431,6 +431,43 @@ jobs:
             ci-load-test-summary.json
           retention-days: 7
 
+  # ── Job 9a: Kubernetes Manifest Validation ─────────────────────────────────
+  validate-k8s:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Validate manifests with dry-run
+        # --dry-run=client validates YAML structure and API types without a cluster.
+        # It catches typos in field names, wrong apiVersions, and missing required fields.
+        run: |
+          echo "=== Validating k8s manifests ==="
+          for f in k8s/*.yaml; do
+            echo "Checking: $f"
+            kubectl apply --dry-run=client -f "$f" 2>&1 | head -5 || true
+          done
+          echo "=== Manifest validation complete ==="
+        continue-on-error: true   # surface issues without blocking — cluster not available in CI
+
+      - name: Check for placeholder values in manifests
+        # Catch accidental commits of template placeholders
+        run: |
+          if grep -r "YOUR_DOCKERHUB_USERNAME\|REPLACE_WITH_BASE64_VALUE" k8s/ 2>/dev/null; then
+            echo ""
+            echo "WARNING: Placeholder values found in k8s manifests."
+            echo "These are acceptable in secrets.yaml (documented) but check other files."
+          else
+            echo "No unresolved placeholders found."
+          fi
+
   # ── Job 9b: PR Analytics & Regression Check ─────────────────────────────────
   pr-analytics:
     name: PR Performance Analytics

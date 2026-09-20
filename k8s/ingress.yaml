@@ -1,13 +1,13 @@
-# Fix 6: Kubernetes Ingress — production-grade routing
-# Replaces NodePort with proper domain-based routing
+# Ingress — optional, provides hostname-based routing via benchmark.local
 #
 # Prerequisites:
 #   minikube addons enable ingress
-#   OR install nginx-ingress-controller in production
-#
-# Local testing:
 #   echo "$(minikube ip) benchmark.local" | sudo tee -a /etc/hosts
-#   Then open: http://benchmark.local
+#
+# Without Ingress, access services directly via NodePort:
+#   Frontend:   http://$(minikube ip):30080
+#   Grafana:    http://$(minikube ip):30300
+#   Prometheus: http://$(minikube ip):30090
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -15,33 +15,16 @@ metadata:
   name: benchmark-ingress
   namespace: benchmark
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
-    # Fix 7: TLS redirect (uncomment when cert-manager is set up)
-    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
-  # Fix 7: TLS (uncomment when cert-manager is set up)
-  # tls:
-  #   - hosts:
-  #       - benchmark.local
-  #     secretName: benchmark-tls
   rules:
     - host: benchmark.local
       http:
         paths:
-          # Frontend — all routes
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: frontend
-                port:
-                  number: 80
-          # Backend API
+          # API routes go directly to the backend Service
           - path: /api
             pathType: Prefix
             backend:
@@ -49,7 +32,6 @@ spec:
                 name: backend
                 port:
                   number: 4000
-          # Auth routes
           - path: /auth
             pathType: Prefix
             backend:
@@ -57,11 +39,18 @@ spec:
                 name: backend
                 port:
                   number: 4000
-          # SSE events
-          - path: /api/events
+          - path: /metrics
             pathType: Prefix
             backend:
               service:
                 name: backend
                 port:
                   number: 4000
+          # All other traffic goes to the frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 8080

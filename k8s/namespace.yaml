@@ -3,4 +3,4 @@ kind: Namespace
 metadata:
   name: benchmark
   labels:
-    app: api-benchmark-saas
+    app: benchly

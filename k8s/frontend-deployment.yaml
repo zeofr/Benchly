@@ -17,10 +17,11 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: YOUR_DOCKERHUB_USERNAME/benchmark-frontend:latest  # Replace with your image
-          imagePullPolicy: Always
+          image: benchly-frontend:latest
+          imagePullPolicy: Never
           ports:
-            - containerPort: 80
+            # nginx.conf listens on 8080 (non-root), NOT 80
+            - containerPort: 8080
           resources:
             requests:
               memory: "64Mi"
@@ -28,23 +29,24 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "200m"
-          # Fix 15: Readiness probe for frontend
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080   # must match containerPort
             initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 3
-            successThreshold: 1
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 15
             periodSeconds: 30
 ---
+# NodePort lets us access the frontend directly via:
+#   minikube service frontend -n benchmark
+# or:
+#   http://$(minikube ip):30080
 apiVersion: v1
 kind: Service
 metadata:
@@ -54,7 +56,8 @@ spec:
   selector:
     app: frontend
   ports:
-    - port: 80
-      targetPort: 80
-      nodePort: 30080   # Access via http://localhost:30080 on Minikube
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
   type: NodePort

@@ -1,0 +1,235 @@
+# Grafana — metrics visualisation
+#
+# Provisioned automatically with:
+#   - Prometheus datasource (pointing to the in-cluster prometheus Service)
+#   - Dashboard provider (loads JSON dashboards from ConfigMap)
+#
+# Access:
+#   minikube service grafana -n benchmark
+#   OR: kubectl port-forward svc/grafana 3001:3000 -n benchmark
+#   Login: admin / admin  (change in production via grafana-secret)
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: benchmark
+data:
+  prometheus.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        # In Kubernetes, Grafana reaches Prometheus via the Service DNS name
+        url: http://prometheus.benchmark.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: benchmark
+data:
+  dashboard.yml: |
+    apiVersion: 1
+    providers:
+      - name: 'benchly'
+        orgId: 1
+        folder: 'Benchly'
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: benchmark
+data:
+  benchly.json: |
+    {
+      "title": "Benchly — API Performance",
+      "uid": "benchly-main",
+      "schemaVersion": 36,
+      "version": 1,
+      "refresh": "10s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "HTTP Request Rate (RPS)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+          "targets": [{
+            "expr": "sum(rate(http_requests_total[1m]))",
+            "legendFormat": "RPS"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+        {
+          "id": 2,
+          "title": "HTTP Error Rate (%)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+          "targets": [{
+            "expr": "sum(rate(http_requests_total{status_code=~'5..'}[1m])) / sum(rate(http_requests_total[1m])) * 100",
+            "legendFormat": "Error %"
+          }],
+          "fieldConfig": {"defaults": {"unit": "percent", "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "red", "value": 5}]}}}
+        },
+        {
+          "id": 3,
+          "title": "Backend Pod Count",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+          "targets": [{
+            "expr": "count(kube_pod_info{namespace='benchmark', pod=~'backend-.*'})",
+            "legendFormat": "Pods"
+          }],
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "blue", "value": null}]}}}
+        },
+        {
+          "id": 4,
+          "title": "HPA Current / Max Replicas",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+          "targets": [
+            {"expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace='benchmark', horizontalpodautoscaler='backend-hpa'}", "legendFormat": "Current"},
+            {"expr": "kube_horizontalpodautoscaler_spec_max_replicas{namespace='benchmark', horizontalpodautoscaler='backend-hpa'}", "legendFormat": "Max"}
+          ]
+        },
+        {
+          "id": 5,
+          "title": "p95 Latency (ms)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "targets": [{
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket[1m])) by (le))",
+            "legendFormat": "p95 latency"
+          }],
+          "fieldConfig": {"defaults": {"unit": "ms"}}
+        },
+        {
+          "id": 6,
+          "title": "CPU Utilization per Pod (%)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "targets": [{
+            "expr": "rate(process_cpu_seconds_total[1m]) * 100",
+            "legendFormat": "{{pod}} CPU"
+          }],
+          "fieldConfig": {"defaults": {"unit": "percent"}}
+        },
+        {
+          "id": 7,
+          "title": "Request Rate by Status",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "targets": [{
+            "expr": "sum(rate(http_requests_total[1m])) by (status_code)",
+            "legendFormat": "{{status_code}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+        {
+          "id": 8,
+          "title": "Memory (heap used)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "targets": [{
+            "expr": "nodejs_heap_size_used_bytes",
+            "legendFormat": "{{pod}} heap"
+          }],
+          "fieldConfig": {"defaults": {"unit": "bytes"}}
+        }
+      ],
+      "time": {"from": "now-30m", "to": "now"},
+      "timepicker": {}
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: benchmark
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.2.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-secret
+                  key: GF_SECURITY_ADMIN_PASSWORD
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: benchmark
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 30300
+  type: NodePort

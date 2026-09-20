@@ -299,7 +299,7 @@ resource "kubernetes_deployment" "frontend" {
           image = "${var.dockerhub_username}/benchmark-frontend:latest"
 
           port {
-            container_port = 80
+            container_port = 8080   # nginx listens on 8080 (non-root), not 80
           }
 
           resources {
@@ -496,8 +496,8 @@ resource "kubernetes_service" "frontend" {
     selector = { app = "frontend" }
 
     port {
-      port        = 80
-      target_port = 80
+      port        = 8080
+      target_port = 8080
       node_port   = 30080
     }
 

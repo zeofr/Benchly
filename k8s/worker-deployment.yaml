@@ -1,7 +1,3 @@
-# Fix 16: Separate Worker Deployment
-# Worker runs k6 load tests — completely separate from the API backend
-# This prevents k6 from blocking the API server
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,7 +6,7 @@ metadata:
   labels:
     app: worker
 spec:
-  replicas: 2   # Scale workers independently from API
+  replicas: 1
   selector:
     matchLabels:
       app: worker
@@ -18,26 +14,63 @@ spec:
     metadata:
       labels:
         app: worker
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "4001"
-        prometheus.io/path: "/metrics"
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z postgres 5432; do echo waiting; sleep 2; done"]
+        - name: wait-for-redis
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z redis 6379; do echo waiting; sleep 2; done"]
       containers:
         - name: worker
-          image: YOUR_DOCKERHUB_USERNAME/benchmark-backend:latest
-          command: ["node", "src/worker.js"]   # Run worker, not API server
+          image: benchly-backend:latest
+          imagePullPolicy: Never
+          # Override CMD to run worker instead of API server
+          command: ["node", "src/worker.js"]
           env:
             - name: NODE_ENV
-              value: "production"
-            - name: REDIS_HOST
-              value: "redis"
-            - name: REDIS_PORT
-              value: "6379"
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: NODE_ENV
             - name: DB_HOST
-              value: "postgres"
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: DB_HOST
             - name: DB_PORT
-              value: "5432"
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: DB_PORT
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: REDIS_PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: LOG_LEVEL
+            - name: OTEL_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: OTEL_ENABLED
+            - name: OTEL_SERVICE_NAME
+              value: "benchmark-worker"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
             - name: DB_NAME
               valueFrom:
                 secretKeyRef:
@@ -54,82 +87,16 @@ spec:
                   name: db-secret
                   key: DB_PASSWORD
           resources:
+            # Workers need more CPU — k6 runs as a subprocess
             requests:
               memory: "256Mi"
               cpu: "200m"
             limits:
               memory: "512Mi"
-              cpu: "1000m"   # Workers need more CPU for k6
+              cpu: "1000m"
+          # Worker has no HTTP server — use a simple process-alive check
           livenessProbe:
             exec:
               command: ["node", "-e", "process.exit(0)"]
             initialDelaySeconds: 30
             periodSeconds: 60
----
-# Redis Deployment (queue backend)
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: redis
-  namespace: benchmark
-  labels:
-    app: redis
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: redis
-  template:
-    metadata:
-      labels:
-        app: redis
-    spec:
-      containers:
-        - name: redis
-          image: redis:7-alpine
-          ports:
-            - containerPort: 6379
-          command: ["redis-server", "--appendonly", "yes"]
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
-              memory: "256Mi"
-              cpu: "200m"
-          volumeMounts:
-            - name: redis-data
-              mountPath: /data
-          readinessProbe:
-            exec:
-              command: ["redis-cli", "ping"]
-            initialDelaySeconds: 5
-            periodSeconds: 5
-      volumes:
-        - name: redis-data
-          persistentVolumeClaim:
-            claimName: redis-pvc
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: redis-pvc
-  namespace: benchmark
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis
-  namespace: benchmark
-spec:
-  selector:
-    app: redis
-  ports:
-    - port: 6379
-      targetPort: 6379
-  type: ClusterIP

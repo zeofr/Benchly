@@ -1,5 +1,22 @@
-# Horizontal Pod Autoscaler for Backend
-# Scales between 2-10 replicas based on CPU usage
+# Horizontal Pod Autoscaler for the backend
+#
+# Prerequisites:
+#   minikube addons enable metrics-server
+#   kubectl get apiservice v1beta1.metrics.k8s.io   # should show Available=True
+#
+# How it works:
+#   1. Metrics Server collects CPU/memory from each pod's kubelet
+#   2. HPA queries Metrics Server every 15s (default)
+#   3. When average CPU across all backend pods > 70% of the 100m REQUEST,
+#      HPA calculates desired replicas = ceil(current * actual/target)
+#   4. HPA tells the Deployment to update replica count
+#   5. The Service automatically routes to the new pods once they pass readiness
+#
+# Example scaling trigger:
+#   2 pods × 100m CPU request = 200m total capacity
+#   70% threshold = 140m target
+#   If actual usage = 160m → desired = ceil(2 × 160/140) = ceil(2.28) = 3 replicas
+
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -11,33 +28,6 @@ spec:
     kind: Deployment
     name: backend
   minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 60   # Scale up when CPU > 60%
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 70   # Scale up when memory > 70%
----
-# HPA for Frontend
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: frontend-hpa
-  namespace: benchmark
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: frontend
-  minReplicas: 2
   maxReplicas: 5
   metrics:
     - type: Resource
@@ -46,3 +36,19 @@ spec:
         target:
           type: Utilization
           averageUtilization: 70
+  # Prevent rapid flapping:
+  # scale up fast (respond to load within 60s)
+  # scale down slowly (wait 5 minutes to confirm load dropped)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
