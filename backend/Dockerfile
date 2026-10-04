@@ -1,4 +1,7 @@
-# ── Stage 1: Build dependencies ──────────────────────────────────────────────
+# ── Stage 1: Install production dependencies ─────────────────────────────────
+# Separate stage so devDependencies (jest, eslint, nodemon) never reach the
+# runtime image. npm ci runs once here; the runtime stage just copies the
+# resulting node_modules directory.
 FROM node:24-slim AS builder
 
 WORKDIR /app
@@ -8,29 +11,24 @@ RUN npm ci --only=production
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM node:24-slim
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 python3-venv python3-pip ca-certificates && \
-    rm -rf /var/lib/apt/lists/* && \
-    groupadd -r appgroup && useradd -r -g appgroup appuser
+# Non-root user for security
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 WORKDIR /app
 
+# Bring in pre-built node_modules from the builder stage
 COPY --from=builder /app/node_modules ./node_modules
 COPY backend/src/ ./src/
 COPY backend/k6/ ./k6/
 COPY backend/package.json ./
-COPY analytics/ ./analytics/
-RUN python3 -m venv /opt/analytics-venv && \
-  /opt/analytics-venv/bin/pip install --upgrade pip setuptools wheel && \
-  /opt/analytics-venv/bin/pip install --no-cache-dir -r ./analytics/requirements.txt
-ENV PATH="/opt/analytics-venv/bin:${PATH}"
 
-# Install k6 only if not in CI environment
-# In CI: image is built for scanning only, k6 not needed
-# In production: set INSTALL_K6=true
+# Install k6 only when INSTALL_K6=true.
+# Default is false so CI image scans don't need it.
+# docker-compose and the k8s build guide both pass INSTALL_K6=true.
 ARG INSTALL_K6=false
 RUN if [ "$INSTALL_K6" = "true" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+      apt-get update && \
+      apt-get install -y --no-install-recommends curl ca-certificates && \
       ARCH=$(uname -m) && \
       if [ "$ARCH" = "x86_64" ]; then K6_ARCH="amd64"; else K6_ARCH="arm64"; fi && \
       curl -L "https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-${K6_ARCH}.tar.gz" \
@@ -38,7 +36,8 @@ RUN if [ "$INSTALL_K6" = "true" ]; then \
       tar -xzf /tmp/k6.tar.gz -C /tmp && \
       mv "/tmp/k6-v0.49.0-linux-${K6_ARCH}/k6" /usr/local/bin/k6 && \
       rm -rf /tmp/k6* && \
-      apt-get purge -y --auto-remove curl && rm -rf /var/lib/apt/lists/*; \
+      apt-get purge -y --auto-remove curl && \
+      rm -rf /var/lib/apt/lists/*; \
     fi
 
 RUN chown -R appuser:appgroup /app

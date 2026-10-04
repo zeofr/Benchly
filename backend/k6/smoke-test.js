@@ -42,7 +42,7 @@ export default function () {
     'smoke: prometheus format': function(r) { return r.body.indexOf('# HELP') !== -1; },
   });
 
-  var authed = http.get(baseUrl + '/api/benchmark/history', {
+  var authed = http.get(baseUrl + '/api/benchmark', {
     headers: { 'X-API-Key': apiKey },
   });
   check(authed, {

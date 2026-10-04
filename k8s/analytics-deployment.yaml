@@ -25,9 +25,6 @@ spec:
           imagePullPolicy: Never
           ports:
             - containerPort: 8001
-          env:
-            - name: OPENAI_API_KEY
-              value: ""
           resources:
             requests:
               memory: "128Mi"

@@ -2,7 +2,7 @@
 # Demo Startup Script for macOS/Linux/WSL
 # This script starts the backend and creates a public tunnel for your presentation
 
-echo "🚀 API Benchmarking SaaS - Demo Startup"
+echo "Benchly - Demo Startup"
 echo "======================================="
 echo ""
 

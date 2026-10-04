@@ -81,7 +81,7 @@ export default function () {
   sleep(0.1);
 
   // ── Request 2: Benchmark history (DB query — heavier, drives CPU/IO) ──────
-  var historyRes = http.get(baseUrl + '/api/benchmark/history', params);
+  var historyRes = http.get(baseUrl + '/api/benchmark', params);
   responseTime.add(historyRes.timings.duration);
   // 401 is auth-valid — only count real failures
   errorRate.add(historyRes.status === 0 || historyRes.status >= 500);

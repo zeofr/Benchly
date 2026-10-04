@@ -32,8 +32,7 @@ if ($status -notmatch "Running") {
 Write-Host ""
 Write-Host "[2/8] Enabling Minikube addons..." -ForegroundColor Yellow
 minikube addons enable metrics-server
-minikube addons enable ingress
-Write-Host "      metrics-server and ingress enabled."
+Write-Host "      metrics-server enabled."
 
 # Step 3: Configure Docker to use Minikube's daemon
 Write-Host ""

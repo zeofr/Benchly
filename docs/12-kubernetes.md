@@ -18,7 +18,6 @@ k8s/
 ├── frontend-deployment.yaml # Frontend nginx Deployment + Service
 ├── analytics-deployment.yaml# FastAPI analytics Deployment + Service
 ├── hpa.yaml                 # HorizontalPodAutoscaler for backend
-├── ingress.yaml             # Ingress for external access
 ├── prometheus.yaml          # Prometheus Deployment + ConfigMap + Service
 ├── grafana.yaml             # Grafana Deployment + Service
 └── jaeger.yaml              # Jaeger Deployment + Service
@@ -50,7 +49,6 @@ kubectl apply -f k8s/prometheus.yaml
 kubectl apply -f k8s/grafana.yaml
 kubectl apply -f k8s/jaeger.yaml
 kubectl apply -f k8s/hpa.yaml
-kubectl apply -f k8s/ingress.yaml
 ```
 
 Or use the setup script:
@@ -163,19 +161,6 @@ Prerequisite: `minikube addons enable metrics-server`
 - HPA target = 70% of 100m = 70m per pod
 - At 2 pods: total capacity = 200m, threshold = 140m
 - If actual usage = 160m → `ceil(2 × 160/140)` = 3 replicas
-
-## Ingress (`ingress.yaml`)
-
-Routes external traffic:
-- `/` → frontend service (port 8080)
-- `/api/` → backend service (port 4000)
-- `/auth/` → backend service (port 4000)
-- `/metrics` → backend service (port 4000)
-
-Requires nginx ingress controller:
-```bash
-minikube addons enable ingress
-```
 
 ## Worker Deployment (`worker-deployment.yaml`)
 

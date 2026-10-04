@@ -39,9 +39,7 @@ fi
 echo ""
 echo "[2/8] Enabling Minikube addons..."
 minikube addons enable metrics-server
-minikube addons enable ingress
 echo "      metrics-server: enabled"
-echo "      ingress: enabled"
 
 # ── Step 3: Point Docker CLI at Minikube's daemon ────────────────────────────
 echo ""
@@ -52,7 +50,7 @@ eval $(minikube docker-env)
 # ── Step 4: Build images ──────────────────────────────────────────────────────
 echo ""
 echo "[4/8] Building Docker images inside Minikube..."
-echo "      Building backend (includes k6, Python analytics)..."
+echo "      Building backend (includes k6)..."
 docker build \
   -t benchly-backend:latest \
   -f "$REPO_ROOT/backend/Dockerfile" \

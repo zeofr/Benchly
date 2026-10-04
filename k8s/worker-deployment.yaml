@@ -71,6 +71,11 @@ spec:
                 configMapKeyRef:
                   name: backend-config
                   key: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: ANALYTICS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: backend-config
+                  key: ANALYTICS_URL
             - name: DB_NAME
               valueFrom:
                 secretKeyRef:
